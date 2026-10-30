@@ -93,7 +93,7 @@ class SimulationOrchestrator:
     def copy_topol(self):
         target_topol = self.system_root_dir / "topol.top"
         if not target_topol.is_file():
-            self.system_root_di.mkdir(parents=True, exist_ok=True)
+            self.system_root_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy(TOPOL_DIR, target_topol)
         self.top = target_topol
 
