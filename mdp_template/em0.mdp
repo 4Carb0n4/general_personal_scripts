@@ -1,0 +1,32 @@
+; 柔性em优化
+
+integrator               = steep
+dt                       = 0.001
+nsteps                   = 10000
+emtol                    = 100.0
+
+nstenergy                = 1000
+nstlog                   = 1000
+nstxout                  = 0
+nstxout-compressed       = 1000
+
+constraint-algorithm     = lincs
+constraints              = none
+
+cutoff-scheme            = Verlet
+
+coulombtype              = PME
+rcoulomb                 = 1.0
+
+vdwtype                  = Cut-off
+rvdw                     = 1.0
+DispCorr                 = EnerPres
+
+free-energy              = yes
+init-lambda-state        = 0
+sc-alpha                 = 0.8
+sc-power                 = 1
+sc-sigma                 = 2
+vdw-lambdas              = 0.0 1.0
+coul-lambdas             = 0.0 1.0
+nstdhdl                  = 10

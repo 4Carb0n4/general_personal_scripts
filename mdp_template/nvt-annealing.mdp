@@ -1,0 +1,51 @@
+; NVT -prd平衡
+;升温到70摄氏度，平衡30ns，退火1k/s
+
+; run
+integrator              = md        
+dt                      = 0.001     ; 1 fs
+nsteps                  = 150000000     ; 2 * 50000000 = 100 ns
+
+
+; output 
+nstenergy                = 15000    ; 150,000,000 / 15000 = 10000 frames
+nstlog                   = 30000    
+nstxout-compressed       = 30000    ; 150,000,000 / 30000 = 5000  frames 
+
+
+; neighbor searching
+cutoff-scheme = Verlet
+nstlist                 = 20  
+pbc                     = xyz
+
+; Electrostatics
+coulombtype              = PME
+rcoulomb                 = 1.0
+
+; van der Waals 
+vdwtype                  = cut-off 
+rvdw                     = 1.0
+DispCorr                 = EnerPres     ; 必须开启，以修正长程范德华力对压力的影响
+
+; NVT
+; 温度
+tcoupl                   = v-rescale
+tc-grps                  = System
+tau-t                    = 1.0
+ref-t                    = 298.15
+; pressure
+pcoupl                  = no
+
+; gen speed
+gen-vel                  = no   ; 承接 NPT 平衡态
+continuation             = yes
+
+;bond
+constraint-algorithm     = lincs
+constraints              = none
+
+; annealing  先10k/ns 升温到70摄氏度 ,平衡 50ns,退火1k/ns
+annealing                = single
+annealing-npoints        = 4
+annealing-time           = 0       4500     54500    99500   
+annealing-temp           = 298.15  343.15   343.15   298.15  

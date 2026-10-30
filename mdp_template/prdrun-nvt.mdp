@@ -1,0 +1,40 @@
+; NVT 平衡
+
+
+
+integrator              = md        ; leap-frog integrator
+dt                      = 0.001     ; 1 fs
+nsteps                  = 50000000     ; 2 * 50000000 = 100 ns
+continuation            = yes           ; 承接 NPT 平衡态
+
+nstenergy                = 50000    ;   50000000/250000 = 200 frames   
+nstlog                   = 50000    ;   50000000/250000 = 200 frames
+nstxout-compressed       = 125000    ;   5e7 / 125000 = 400 frames
+
+gen-vel                  = no   ; 承接 NPT 平衡态
+
+
+constraint-algorithm     = lincs
+constraints              = none
+
+
+; gmx note: increase nstlist to improve performance
+nstlist                  = 80
+coulombtype              = PME
+rcoulomb                 = 1.2
+rvdw                     = 1.2
+vdwtype                  = cut-off 
+DispCorr                 = EnerPres     ; 必须开启，以修正长程范德华力对压力的影响
+
+
+tcoupl                   = v-rescale
+
+tau-t                    = 1.0      1.0
+ref-t                    = 298.15   298.15
+
+
+
+
+pcoupl                  = no
+nstcomm                 =100
+
