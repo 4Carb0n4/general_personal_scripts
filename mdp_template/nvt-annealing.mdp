@@ -20,11 +20,11 @@ pbc                     = xyz
 
 ; Electrostatics
 coulombtype              = PME
-rcoulomb                 = 1.0
+rcoulomb                 = 1.2
 
 ; van der Waals 
 vdwtype                  = cut-off 
-rvdw                     = 1.0
+rvdw                     = 1.2
 DispCorr                 = EnerPres     ; 必须开启，以修正长程范德华力对压力的影响
 
 ; NVT
