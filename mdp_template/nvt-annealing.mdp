@@ -1,5 +1,5 @@
 ; NVT -prd平衡
-;升温到70摄氏度，平衡30ns，退火1k/s
+;升温到70摄氏度，平衡50ns，退火1k/s
 
 ; run
 integrator              = md        
