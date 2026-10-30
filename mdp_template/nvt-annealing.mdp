@@ -4,7 +4,7 @@
 ; run
 integrator              = md        
 dt                      = 0.001     ; 1 fs
-nsteps                  = 150000000     ; 2 * 50000000 = 100 ns
+nsteps                  = 150000000     ; 150ns
 
 
 ; output 
@@ -14,7 +14,7 @@ nstxout-compressed       = 30000    ; 150,000,000 / 30000 = 5000  frames
 
 
 ; neighbor searching
-cutoff-scheme = Verlet
+cutoff-scheme           = Verlet
 nstlist                 = 20  
 pbc                     = xyz
 
