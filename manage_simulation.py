@@ -53,40 +53,32 @@ class SimulationOrchestrator:
         return mdp_file_list
 
     def gmx_grompp(self,):
-        if self.cpt is None:
-            command_line = ['gmx', 'grompp',
-                            '-f', str(self.mdp),
-                            '-c', str(self.gro),
-                            '-p', str(self.top),
-                            '-o', str(self.output / "topol.tpr"),
-                            '-maxwarn', str(MAX_WARNINGS)]
-        else:
-            command_line = ['gmx', 'grompp',
-                            '-f', str(self.mdp),
-                            '-c', str(self.gro),
-                            '-p', str(self.top),
-                            '-o', str(self.output / "topol.tpr"),
-                            '-t', str(self.cpt),
-                            '-maxwarn', str(MAX_WARNINGS)]
+        command_line = ['gmx', 'grompp',
+                        '-f', str(self.mdp),
+                        '-c', str(self.gro),
+                        '-p', str(self.top),
+                        '-o', str(self.output / "topol.tpr"),
+                        '-maxwarn', str(MAX_WARNINGS)]
+        if self.cpt is not None:
+            command_line.extend(['-cpt', str(self.cpt)])
+
         sp.run(command_line, check=True,cwd=str(self.output))
         self.tpr = self.output / "topol.tpr"
 
 
-    def gmx_mdrun(self,):
+    def gmx_mdrun(self, step_name=None):
+        command_line = ['gmx', 'mdrun',
+                        '-s', str(self.tpr),
+                        '-deffnm', str(self.output.name),
+                        '-ntmpi', '1', '-ntomp', '10',
+                        '-pin', 'on']
+
         if self.gpu_id is None:
-            command_line = ['gmx', 'mdrun',
-                            '-s', str(self.tpr),
-                            '-deffnm', str(self.output.name),
-                            '-ntmpi', '1', '-ntomp', '10',
-                            '-pin', 'on']
-        else:
-            command_line = ['gmx', 'mdrun',
-                            '-s', str(self.tpr),
-                            '-deffnm', str(self.output.name),
-                            '-ntmpi', '1', '-ntomp', '10',
-                            '-gpu_id', str(self.gpu_id),
-                            '-pin', 'on',
-                            '-nb', 'gpu']
+            command_line.extend(['-gpu_id', str(self.gpu_id),
+                                      '-nb','gpu'])
+        # if step_name != "em":
+        #     command_line.extend(['-pme', 'gpu'])
+
         sp.run(command_line, check=True, cwd=str(self.output))
 
     # 创建系统目录，复制top
