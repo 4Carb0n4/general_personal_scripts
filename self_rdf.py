@@ -6,6 +6,10 @@ import MDAnalysis as mda
 from MDAnalysis.transformations import unwrap
 from pathlib import Path
 from datetime import datetime
+from tqdm import tqdm
+from PositionsReader import PositionsReader
+
+CACHE = 'mono_indices.npz'
 
 
 @cuda.jit
@@ -31,88 +35,7 @@ def distance_counts_cuda_kernal(pos_a: np.ndarray, pos_b: np.ndarray,
             cuda.atomic.add(counts, bin_index, 1)
 
 
-class PositionsReader:
-    def __init__(self, topol_file):
-        pass
 
-    @staticmethod
-    def get_mono_com(u: mda.Universe):
-
-        mono = u.select_atoms("resname M")
-        heavy_mono_res = mono.select_atoms("not name H*").residues
-
-        mono_list = []
-        for r in heavy_mono_res:
-            unit = mono.select_atoms(
-                "group heavy or (name H* and bonded group heavy)",
-                heavy=r.atoms)
-            mono_list.append(unit)
-
-        position = np.empty((u.trajectory.n_frames, len(mono_list), 3))
-        for i, ts in enumerate(u.trajectory):
-            for j, m in enumerate(mono_list):
-                position[i, j, :] = m.center_of_mass()
-            print(f"{ts.frame}")
-        return position
-
-    @staticmethod
-    def get_chain_com(u: mda.Universe):
-        whole_chain = u.select_atoms("resname C")
-        raise NotImplementedError
-
-    @staticmethod
-    def get_solvation_com(u: mda.Universe):
-        solvation = u.select_atoms('resname SOL').residues
-        position = np.empty((int(u.trajectory.n_frames), len(solvation), 3))
-        for i, _ts in enumerate(u.trajectory):
-            position[i, :, :] = solvation.center_of_mass(compound='residues')
-            print(f"{_ts.frame}")
-        return position
-
-    @staticmethod
-    def get_solvation_oxygen(u: mda.Universe):
-        oxygen = u.select_atoms('resname SOL and name OW')
-        position = np.empty((int(u.trajectory.n_frames), len(oxygen), 3))
-        for i, ts in enumerate(u.trajectory):
-            position[i, :, :] = oxygen.positions
-            print(f"{ts.frame}")
-        return position
-
-    @staticmethod
-    def get_solvation_hydrogen(u: mda.Universe):
-        hydro = u.select_atoms('resname SOL and name H*')
-        position = np.empty((int(u.trajectory.n_frames), len(hydro), 3))
-        for i, _ts in enumerate(u.trajectory):
-            position[i, :, :] = hydro.positions
-            print(f"{_ts.frame}")
-        return position
-
-    @staticmethod
-    def get_polymer_oxygen(u: mda.Universe):
-        poly_oxy = u.select_atoms('not resname SOL and name O')
-        position = np.empty((int(u.trajectory.n_frames), len(poly_oxy), 3))
-        for i, ts in enumerate(u.trajectory):
-            position[i, :, :] = poly_oxy.positions
-            print(f"{ts.frame}")
-        return position
-
-    @staticmethod
-    def get_polymer_nitrogen(u: mda.Universe):
-        poly_nitro = u.select_atoms('not resname SOL and name N')
-        position = np.empty((int(u.trajectory.n_frames), len(poly_nitro), 3))
-        for i, ts in enumerate(u.trajectory):
-            position[i, :, :] = poly_nitro.positions
-            print(f"{ts.frame}")
-        return position
-
-
-READER_MAP = {'mono_com': PositionsReader.get_mono_com,
-              'sol_com': PositionsReader.get_solvation_com,
-              'chain_com': PositionsReader.get_chain_com,
-              'poly_O': PositionsReader.get_polymer_oxygen,
-              'poly_N': PositionsReader.get_polymer_nitrogen,
-              'sol_O': PositionsReader.get_solvation_oxygen,
-              'sol_H': PositionsReader.get_solvation_hydrogen}
 
 
 class Orchestrator:
@@ -200,36 +123,40 @@ class Orchestrator:
 
         return rbins_numden
 
-    def get_standard_data(self):
+    def get_position_data(self):
         u = mda.Universe(self.topol, self.trajectory)
-        # u.trajectory.add_transformations(unwrap(u.atoms))
+        # u.trajectory.add_transformations(unwrap(u.atoms))  #pbc unwrap
+
         # box [frames, n_particles, 3]
-        box = np.zeros((int(u.trajectory.n_frames), 3))
-        for index, ts in enumerate(u.trajectory):
-            box[index, :] = [u.dimensions[0], u.dimensions[1], u.dimensions[2]]
 
         print("read started")
-        pos_a = READER_MAP[self.ref](u)
-        pos_b = READER_MAP[self.sel](u) if self.sel != self.ref else pos_a
-        print("read was done")
+        box = PositionsReader.get_box(u)
+        pos_a = PositionsReader.get_positions(self.ref, u)
+        pos_b = PositionsReader.get_positions(self.sel, u) # if self.sel != self.ref else pos_a
+        print("read done")
 
         return pos_a, pos_b, box
 
     def get_args(self):
         parser = argparse.ArgumentParser()
+        parser.add_argument_group('Neccessary arguments:')
         parser.add_argument('-p', '--topol', help='拓扑,.tpr/.top etc', type=str, required=True)
-        parser.add_argument('-f', '--trajectory', help='轨迹,.xtc/.trr etc', required=True)
-        parser.add_argument('-b', '--bin', help='bins 球差分半径,default=1 Å', default=1, type=float)
+        parser.add_argument('-f', '--traj', help='轨迹,.xtc/.trr etc', required=True)
+        parser.add_argument('-ref',choices=PositionsReader.read_map.keys(),
+                            help=f"参考组", required=True)
+        parser.add_argument('-sel', choices=PositionsReader.read_map.keys(),
+                            help=f"计算组", required=True)
+        parser.add_argument('-b', '--bin', help='bins 球差分半径,default=1 Å(ANG)',
+                            default=1, type=float)
         parser.add_argument('-o', '--output', help='输出文件', default=None)
-        parser.add_argument('-u', '--usage', help='功能，计算rdf(-u rdf)或者数密度(-u pho)',
-                            default="rdf")
-        parser.add_argument('-ref', help=f"参考组,可选:{READER_MAP.keys()}", required=True)
-        parser.add_argument('-sel', help=f"计算组,可选:{READER_MAP.keys()}", required=True)
+        parser.add_argument('-u', '--usage',choices=['rdf','pho'],
+                            help='功能，计算rdf(-u rdf)或者数密度(-u pho)',default="rdf")
+
         parser.add_argument('-gpu_id', help='gpu', default=3, type=int)
         args = parser.parse_args()
 
         self.topol = Path(args.topol)
-        self.trajectory = Path(args.trajectory)
+        self.trajectory = Path(args.traj)
         self.bins = args.bin
         self.ref = args.ref
         self.sel = args.sel
@@ -237,33 +164,34 @@ class Orchestrator:
         self.output = Path(args.output)
         self.gpu_id = args.gpu_id
 
-        return None
+        return args
 
 
 def main():
-    orchestrator = Orchestrator()
-    orchestrator.get_args()
+    orch = Orchestrator()
+    orch.get_args()
 
-    pos_a, pos_b, box = orchestrator.get_standard_data()
+    cuda.select_device(orch.gpu_id)
+    pos_a, pos_b, box = orch.get_position_data()
 
-    if orchestrator.usage == 'rdf':
-        data = orchestrator.cal_rdf(pos_a, pos_b, box, orchestrator.bins)
-    elif orchestrator.usage == 'number_density':
-        data = orchestrator.cal_number_density(pos_a, pos_b, box, orchestrator.bins)
+    if orch.usage == 'rdf':
+        data = orch.cal_rdf(pos_a, pos_b, box, orch.bins)
+    elif orch.usage == 'number_density':
+        data = orch.cal_number_density(pos_a, pos_b, box, orch.bins)
     else:
-        raise NotImplementedError(f"Unsupported usage:{orchestrator.usage}")
+        raise NotImplementedError(f"Unsupported usage:{orch.usage}")
 
-    out_name = orchestrator.output or f"num_den{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-    comments = (f"# started on {datetime.now().strftime('%Y%m%d_%H%M%S')}\n"
-                f"# topol file {orchestrator.topol.resolve()}\n"
-                f"# trajectory file {orchestrator.trajectory.resolve()}\n"
-                f"# reference group {orchestrator.ref}\n"
-                f"# calculation group {orchestrator.sel}\n")
-    labels = ("@ title RDF\n"
-              "@ xaxis label radius (Å)\n"
-              "@ yaxis label g(r)\n"
-              "@ s1 legend RDF")
-    np.savetxt(out_name, data, header=comments + labels,comments='')
+    out_name = orch.output or f"num_den{datetime.now().strftime('%Y%m%d_%H%M%S')}.xvg"
+    comments = (f"# generated on {datetime.now().strftime('%Y%m%d_%H%M%S')}\n"
+                f"# topol file {orch.topol.resolve()}\n"
+                f"# trajectory file {orch.trajectory.resolve()}\n"
+                f"# reference group {orch.ref}\n"
+                f"# calculation group {orch.sel}\n")
+    labels = (f'@ title "{orch.output.stem}"\n'
+              '@ xaxis label "radius (ANG)"\n'
+              '@ yaxis label "g(r)"\n'
+              '@ s1 legend "RDF"')
+    np.savetxt(out_name, data, header=comments + labels, comments='')
 
 
 if __name__ == "__main__":
