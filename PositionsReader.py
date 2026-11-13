@@ -4,6 +4,7 @@ import numpy as np
 from tqdm import tqdm
 import math
 
+
 class PositionsReader:
     read_map = {
         'mono_com': 'get_mono_com',
@@ -14,6 +15,7 @@ class PositionsReader:
         'sol_O': 'get_solvation_oxygen',
         'sol_H': 'get_solvation_hydrogen',
     }
+    CACHE = "mono_indices.npz"
 
     @classmethod
     def get_positions(cls, position_type: str, u: mda.Universe, read_interval=None, start=None, end=None):
@@ -40,9 +42,9 @@ class PositionsReader:
         return read_interval, start, end
 
     @staticmethod
-    def get_mono_com(u: mda.Universe, cache_file='mono_indices.npz', read_interval=None, start=None, end=None):
+    def get_mono_com(u: mda.Universe, read_interval=None, start=None, end=None):
 
-        cache_file = Path(cache_file)
+        cache_file = Path(PositionsReader.CACHE)
 
         if cache_file.is_file():
             with np.load(cache_file, allow_pickle=False) as data:
@@ -50,6 +52,7 @@ class PositionsReader:
                     u.atoms[data[f"arr_{i}"]]
                     for i in range(len(data.files))
                 ]
+                print('Load monomers indices successfully')
         else:
             mono = u.select_atoms("resname M")
             heavy_mono_res = mono.select_atoms("not name H*").residues

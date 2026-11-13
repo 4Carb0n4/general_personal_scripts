@@ -11,8 +11,9 @@ from tqdm import tqdm
 from PositionsReader import PositionsReader
 
 
-def get_position_data(universe, ref, sel, end):
+def get_position_data(universe, ref, sel, end, cache):
     print("read started")
+    PositionsReader.CACHE = cache
     pos_a = PositionsReader.get_positions(ref, universe, end=end)
     pos_b = PositionsReader.get_positions(sel, universe, end=end)
     print("read done")
@@ -67,9 +68,8 @@ class VelocityReader:
         for i, ts in enumerate(tqdm(u.trajectory)):
             velo_dot_mass = water.velocities * water.masses[:, None]
             for j in range(0, velo.shape[1]):
-                velo[i, j, :] = (
-                                        velo_dot_mass[j, 3] + velo_dot_mass[j + 1, 3] + velo_dot_mass[j + 2, 3]
-                                ) / mass_of_water
+                velo[i, j, :] = (velo_dot_mass[j, 3] + velo_dot_mass[j + 1, 3] + velo_dot_mass[j + 2, 3]
+                                 ) / mass_of_water
         return velo
 
 
@@ -166,10 +166,12 @@ def ACF_self(velo: np.ndarray):
 
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+    parser.add_argument_group("输入输出")
     parser.add_argument('-p', '--topol', help='拓扑,.tpr/.top etc', required=True)
     parser.add_argument('-f', '--trajectory', help='轨迹,.xtc/.trr etc', required=True)
-    parser.add_argument('-r', '--radius', help='', type=str, required=True)
     parser.add_argument('-o', '--output', help='输出文件', default=None)
+    parser.add_argument_group("计算：半径和组")
+    parser.add_argument('-r', '--radius', help='', type=str, required=True)
     parser.add_argument('-ref', help='参考组',
                         choices=PositionsReader.read_map.keys(), required=True)
     parser.add_argument('-sel', help="对比组",
@@ -180,6 +182,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument('--stop', action='store_true', default=False)
     parser.add_argument('--continue_run', action='store_true', help='从dump处恢复', default=False)
     parser.add_argument('-e', '--end', type=float, default=None)
+    parser.add_argument('--cache', default='mono_indices.npz')
 
     args = parser.parse_args()
     return args
@@ -193,7 +196,7 @@ def main():
     traj1 = Path(args.trajectory)
     u = mda.Universe(str(top1), str(traj1))
 
-    atom_x, atom_y = get_position_data(u, args.ref, args.sel, end=args.end)
+    atom_x, atom_y = get_position_data(u, args.ref, args.sel, args.end, args.cache)
     total_frames = atom_x.shape[0]
 
     r_divide = tuple([float(i) for i in args.radius.split(',')])
@@ -226,13 +229,13 @@ def main():
     data = np.arange(0, total_frames) * u.trajectory.dt
 
     header_comments = [
-        f"# ref group{args.ref}",
-        f"# sel group{args.sel}",
-        f"# cal group{args.cal}",
-        f"# layer devition {args.radius}"
+        f"# ref group {args.ref}",
+        f"# sel group {args.sel}",
+        f"# cal group {args.cal}",
+        f"# layer devision {args.radius}"
     ]
-    header_labels = ["@ xlabel time(ps)",
-                     "@ ylabel VACF"]
+    header_labels = ['@ xlabel time(ps)',
+                     '@ ylabel VACF']
     for i, grp in enumerate(sort_result):
         print(f"Group {i} :{len(grp)}")
         water_number.append(len(grp))
@@ -249,6 +252,7 @@ def main():
                data,
                header=header,
                comments='')
+
 
 # ========================================
 if __name__ == '__main__':
